@@ -31,9 +31,8 @@ git push -u origin main
 
 #### 3️⃣ Enable GitHub Pages
 - Go to: `https://github.com/YOUR_USERNAME/dt-records/settings/pages`
-- Source: **Deploy from a branch**
-- Branch: **main** / Folder: **/ (root)**
-- Click **Save**
+- Source: **GitHub Actions**
+- The workflow will auto-deploy on your next push!
 
 🎉 **Done!** Your site will be live at:
 ```

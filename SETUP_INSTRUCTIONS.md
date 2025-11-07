@@ -41,10 +41,10 @@ If prompted for credentials:
 2. Click "Settings" (top right)
 3. Scroll down and click "Pages" in the left sidebar
 4. Under "Build and deployment":
-   - **Source**: Select "Deploy from a branch"
-   - **Branch**: Select "main" and "/ (root)"
-   - Click "Save"
-5. Wait 1-2 minutes for the site to build
+   - **Source**: Select "GitHub Actions"
+5. The workflow will automatically deploy on the next push
+
+**Note**: The repository includes a GitHub Actions workflow that automatically deploys your site whenever you update photos or index.html. No manual deployment needed!
 
 ## Step 4: Access Your Site
 

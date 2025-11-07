@@ -73,10 +73,9 @@ git push origin main
 2. **Enable GitHub Pages**
    - Go to your repository on GitHub
    - Click "Settings" → "Pages"
-   - Under "Source", select "Deploy from a branch"
-   - Select branch: `main` and folder: `/ (root)`
-   - Click "Save"
+   - Under "Source", select "GitHub Actions"
    - Your site will be published at: `https://[your-username].github.io/dt-records/`
+   - The site automatically updates when you push changes to photos or index.html!
 
 3. **Make the helper script executable**
    ```bash
@@ -92,11 +91,19 @@ git push origin main
 # View all photos by date
 ls -la photos/
 
-# Push changes to GitHub
+# Push changes to GitHub (auto-deploys via GitHub Actions!)
 git add photos/
 git commit -m "Add trading photos"
 git push
 ```
+
+## 🤖 Automatic Deployment
+
+This repository includes a GitHub Actions workflow that automatically deploys your site whenever you:
+- Add or update photos in the `photos/` directory
+- Modify the `index.html` file
+
+Just push your changes and the site updates automatically within 30-60 seconds! No manual deployment needed.
 
 ## 🔍 Viewing Photos
 
