@@ -21,13 +21,15 @@ input bool ShowMilliseconds = false;        // Show milliseconds
 
 //--- Global variables
 string labelName = "TimeframeCountdown";
+string labelName2 = "CandlePoints";
+int currentBarIndex = 0;  // Track which bar to display
 
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   //--- Create text label
+   //--- Create text label for countdown
    if(ObjectFind(0, labelName) < 0)
    {
       ObjectCreate(0, labelName, OBJ_LABEL, 0, 0, 0);
@@ -43,8 +45,27 @@ int OnInit()
    ObjectSetInteger(0, labelName, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, labelName, OBJPROP_HIDDEN, true);
    
+   //--- Create text label for candle points
+   if(ObjectFind(0, labelName2) < 0)
+   {
+      ObjectCreate(0, labelName2, OBJ_LABEL, 0, 0, 0);
+   }
+   
+   //--- Set second label properties (positioned below first label)
+   ObjectSetInteger(0, labelName2, OBJPROP_CORNER, Corner);
+   ObjectSetInteger(0, labelName2, OBJPROP_XDISTANCE, XDistance);
+   ObjectSetInteger(0, labelName2, OBJPROP_YDISTANCE, YDistance + FontSize + 5);
+   ObjectSetInteger(0, labelName2, OBJPROP_COLOR, TextColor);
+   ObjectSetInteger(0, labelName2, OBJPROP_FONTSIZE, FontSize);
+   ObjectSetString(0, labelName2, OBJPROP_FONT, FontName);
+   ObjectSetInteger(0, labelName2, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, labelName2, OBJPROP_HIDDEN, true);
+   
    //--- Enable timer
    EventSetTimer(1);
+   
+   //--- Enable mouse move events to track cursor position
+   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
    
    return(INIT_SUCCEEDED);
 }
@@ -57,8 +78,9 @@ void OnDeinit(const int reason)
    //--- Kill timer
    EventKillTimer();
    
-   //--- Delete label
+   //--- Delete labels
    ObjectDelete(0, labelName);
+   ObjectDelete(0, labelName2);
 }
 
 //+------------------------------------------------------------------+
@@ -92,6 +114,39 @@ void OnTimer()
 }
 
 //+------------------------------------------------------------------+
+//| Chart event handler                                              |
+//+------------------------------------------------------------------+
+void OnChartEvent(const int id,
+                  const long &lparam,
+                  const double &dparam,
+                  const string &sparam)
+{
+   //--- Mouse move event
+   if(id == CHARTEVENT_MOUSE_MOVE)
+   {
+      //--- Get mouse coordinates
+      int x = (int)lparam;
+      int y = (int)dparam;
+      
+      //--- Convert screen coordinates to time and price
+      datetime time;
+      double price;
+      int window;
+      
+      if(ChartXYToTimePrice(0, x, y, window, time, price))
+      {
+         //--- Find the bar index for this time
+         int barIndex = iBarShift(_Symbol, _Period, time);
+         if(barIndex >= 0)
+         {
+            currentBarIndex = barIndex;
+            UpdateCountdown();
+         }
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
 //| Update countdown display                                         |
 //+------------------------------------------------------------------+
 void UpdateCountdown()
@@ -112,8 +167,36 @@ void UpdateCountdown()
    //--- Format countdown string
    string countdownText = FormatCountdown(remainingSeconds, periodSeconds);
    
-   //--- Update label
+   //--- Update countdown label
    ObjectSetString(0, labelName, OBJPROP_TEXT, countdownText);
+   
+   //--- Get candle data for the candle at cursor position (or current candle)
+   double open = iOpen(_Symbol, _Period, currentBarIndex);
+   double close = iClose(_Symbol, _Period, currentBarIndex);
+   
+   //--- Calculate points difference (Close - Open)
+   double pointsDiff = close - open;
+   double candlePoints = pointsDiff / _Point;
+   
+   //--- Format candle points string
+   string candleText = "";
+   if(currentBarIndex > 0)
+      candleText += "Bar[" + IntegerToString(currentBarIndex) + "] ";
+   else
+      candleText += "Current ";
+   
+   candleText += "Candle: ";
+   if(candlePoints >= 0)
+      candleText += "+";
+   candleText += IntegerToString((int)candlePoints) + " pts";
+   
+   if(candlePoints >= 0)
+      candleText += " (Bullish)";
+   else
+      candleText += " (Bearish)";
+   
+   //--- Update candle points label
+   ObjectSetString(0, labelName2, OBJPROP_TEXT, candleText);
    
    //--- Refresh chart
    ChartRedraw(0);
