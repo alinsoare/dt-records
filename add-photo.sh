@@ -66,13 +66,17 @@ cp "$PHOTO_FILE" "$DATE_DIR/"
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓${NC} Photo added successfully!"
     echo -e "${BLUE}Location:${NC} $DATE_DIR/$FILENAME"
-    echo ""
-    echo "To upload to GitHub, run:"
-    echo -e "${BLUE}  git add photos/$DATE/${NC}"
-    echo -e "${BLUE}  git commit -m \"Add trading photos for $DATE\"${NC}"
-    echo -e "${BLUE}  git push${NC}"
+#    echo ""
+#    echo "To upload to GitHub, run:"
+#    echo -e "${BLUE}  git add photos/$DATE/${NC}"
+#    echo -e "${BLUE}  git commit -m \"Add trading photos for $DATE\"${NC}"
+#    echo -e "${BLUE}  git push${NC}"
 else
     echo -e "${RED}Error: Failed to copy photo${NC}"
     exit 1
 fi
+
+git add photos/$DATE/
+git commit -m "Add trading photos for $DATE"
+git push
 
