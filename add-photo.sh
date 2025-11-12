@@ -58,10 +58,10 @@ if [ ! -f "$PHOTO_FILE" ]; then
 fi
 
 # Get the filename
-FILENAME=$(basename "$PHOTO_FILE")
+FILENAME=$(date +%s)_$(basename "$PHOTO_FILE")
 
 # Copy the photo to the date folder
-cp "$PHOTO_FILE" "$DATE_DIR/"
+cp "$PHOTO_FILE" "$DATE_DIR/$FILENAME"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓${NC} Photo added successfully!"
