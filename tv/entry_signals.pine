@@ -7,6 +7,11 @@ low_ma = ta.sma(close, 200)
 vol_sma = ta.ema(volume, 20)
 volume_ok = volume > vol_sma //* 0.8  // lowered threshold
 lookback_period = input.int(10, "Lookback Period", minval=3, maxval=100)
+start_hour = input.int(2, "Trading Start Hour", minval=0, maxval=23)
+end_hour = input.int(16, "Trading End Hour", minval=0, maxval=23)
+
+// --- Time filter (London SE open to NYSE close) ---
+valid_trading_hours = hour >= start_hour and hour < end_hour
 
 // --- Plot EMAs ---
 plot(high_ma,  color=color.blue,  linewidth=2, title="EMA 20")
@@ -17,7 +22,12 @@ plot(low_ma, color=color.purple, linewidth=2, title="EMA 200 HTF")
 x_over_high = ta.crossover(close, high_ma)
 medium_ma_above_low_ma = ta.barssince(medium_ma <= low_ma) >= lookback_period or na(ta.barssince(medium_ma <= low_ma))
 uptrend = medium_ma_above_low_ma and high_ma > medium_ma and medium_ma > low_ma and (medium_ma - medium_ma[1]) > 0
-buy_condition = x_over_high and volume_ok and uptrend and close > open
+base_buy_condition = x_over_high and volume_ok and uptrend and close > open and valid_trading_hours
+var int last_buy_bar = na
+no_recent_buy = na(last_buy_bar) or (bar_index - last_buy_bar) >= lookback_period
+buy_condition = base_buy_condition and no_recent_buy
+if buy_condition
+    last_buy_bar := bar_index
 
 // --- Plot buy signals ---
 alertcondition(buy_condition, "BUY", "buy")
@@ -27,7 +37,12 @@ plotshape(buy_condition, title="Buy Signal", style=shape.triangleup, location=lo
 x_under_high = ta.crossunder(close,high_ma)
 medium_ma_below_low_ma = ta.barssince(medium_ma >= low_ma) >= lookback_period or na(ta.barssince(medium_ma >= low_ma))
 downtrend = medium_ma_below_low_ma and high_ma < medium_ma and medium_ma < low_ma and (medium_ma - medium_ma[1]) < 0
-sell_condition = x_under_high and volume_ok and downtrend and close < open
+base_sell_condition = x_under_high and volume_ok and downtrend and close < open and valid_trading_hours
+var int last_sell_bar = na
+no_recent_sell = na(last_sell_bar) or (bar_index - last_sell_bar) >= lookback_period
+sell_condition = base_sell_condition and no_recent_sell
+if sell_condition
+    last_sell_bar := bar_index
 
 // --- Plot sell signals ---
 alertcondition(sell_condition, "SELL", "sell")
