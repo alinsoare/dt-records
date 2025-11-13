@@ -1,0 +1,80 @@
+//@version=6
+indicator("Entry signals", overlay = true)
+
+high_ma  = ta.ema(close, 20)
+medium_ma = ta.ema(close, 100)
+low_ma = ta.sma(close, 200)
+
+// --- Plot EMAs ---
+plot(high_ma,  color=color.blue,  linewidth=2, title="EMA 20")
+plot(medium_ma, color=color.green, linewidth=2, title="EMA 100")
+plot(low_ma, color=color.purple, linewidth=2, title="EMA 200 HTF")
+
+vol_sma = ta.sma(volume, 20)
+volume_ok = volume > vol_sma * 0.8  // lowered threshold
+
+// --- Assign crossover results globally (ensures consistent evaluation) ---
+cross_high_ma = ta.crossover(close, high_ma)
+cross_medium_ma  = ta.crossover(close, medium_ma)
+cross_up1 = ta.crossover(medium_ma, low_ma)
+cross_up2 = ta.crossover(high_ma, medium_ma)
+cross_up3 = ta.crossover(high_ma, low_ma)
+cross_up = cross_up1 or cross_up2
+cross_down_medium = ta.crossunder(close,medium_ma)
+cross_down_high = ta.crossunder(low,high_ma)
+
+cross_medium_ma_high = ta.crossover(medium_ma, high)
+cross_low_mahtf_high = ta.crossover(low_ma, high)
+is_hh = high == ta.highest(high, 5)
+uptrend = (low_ma - low_ma[1]) > 0
+strong_uptrend = high_ma > medium_ma and medium_ma > low_ma and (medium_ma - medium_ma[1]) > 0.1
+
+// --- Buy conditions ---
+buy_condition1 = is_hh and cross_medium_ma and volume_ok and high_ma > medium_ma and medium_ma > low_ma
+buy_condition = (buy_condition1 or cross_up) and uptrend and close > open
+alertcondition(buy_condition, "BUY1", "strong buy")
+buy1_prealert = cross_down_medium and (medium_ma - medium_ma[1]) > 0.1
+alertcondition(buy1_prealert , "BUY1 Prealert", "prepare for strong buy")
+buy_condition_minor = strong_uptrend and cross_high_ma
+alertcondition(buy_condition_minor, "BUY2", "minor buy")
+buy2_prealert = cross_down_high and (medium_ma - medium_ma[1]) > 0.1
+alertcondition(buy2_prealert , "BUY2 Prealert", "prepare for minor buy")
+
+// --- Plot buy signals ---
+plotshape(buy_condition, title="Buy Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotarrow(buy_condition_minor ? 1 : 0, title = "Buy Minor Signal", colorup = color.green, maxheight = 10)
+
+// --- Sell conditions ---
+// Define sell crossover conditions (opposite of buy conditions)
+cross_down_high_ma = ta.crossunder(close, high_ma)
+cross_down_medium_ma = ta.crossunder(close, medium_ma)
+cross_down1 = ta.crossunder(medium_ma, low_ma)
+cross_down2 = ta.crossunder(high_ma, medium_ma)
+cross_down3 = ta.crossunder(high_ma, low_ma)
+cross_down = cross_down1 or cross_down2 or cross_down3
+
+// Define lower low condition (opposite of higher high)
+is_ll = low == ta.lowest(low, 5)
+downtrend = (low_ma - low_ma[1]) < 0
+strong_downtrend = high_ma < medium_ma and medium_ma < low_ma and (medium_ma - medium_ma[1]) < -0.1
+
+// Strong sell condition (opposite of strong buy)
+sell_condition1 = is_ll and cross_down_medium_ma and volume_ok and high_ma < medium_ma and medium_ma < low_ma
+sell_condition = (sell_condition1 or cross_down) and downtrend and close < open
+alertcondition(sell_condition, "SELL1", "strong sell")
+
+// Pre-alert for strong sell
+sell1_prealert = ta.crossover(close, medium_ma) and (medium_ma - medium_ma[1]) < -0.1
+alertcondition(sell1_prealert, "SELL1 Prealert", "prepare for strong sell")
+
+// Minor sell condition (opposite of minor buy)
+sell_condition_minor = strong_downtrend and cross_down_high_ma
+alertcondition(sell_condition_minor, "SELL2", "minor sell")
+
+// Pre-alert for minor sell
+sell2_prealert = ta.crossover(low, high_ma) and (medium_ma - medium_ma[1]) < -0.1
+alertcondition(sell2_prealert, "SELL2 Prealert", "prepare for minor sell")
+
+// --- Plot sell signals ---
+plotshape(sell_condition, title="Sell Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
+plotarrow(sell_condition_minor ? -1 : 0, title = "Sell Minor Signal", colordown = color.red, maxheight = 10)
