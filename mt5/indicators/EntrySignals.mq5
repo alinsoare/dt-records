@@ -7,28 +7,18 @@
 #property version   "1.00"
 #property indicator_chart_window
 #property indicator_buffers 3
-#property indicator_plots   3
+#property indicator_plots   0
 
-// Plot buffers
-#property indicator_label1  "EMA 20"
-#property indicator_type1   DRAW_LINE
-#property indicator_color1  clrBlue
-#property indicator_width1  2
-
-#property indicator_label2  "EMA 100"
-#property indicator_type2   DRAW_LINE
-#property indicator_color2  clrGreen
-#property indicator_width2  2
-
-#property indicator_label3  "SMA 200"
-#property indicator_type3   DRAW_LINE
-#property indicator_color3  clrPurple
-#property indicator_width3  2
+// MA buffers used for calculations only (not plotted)
+// EMA 20, EMA 100, SMA 200
 
 // Input parameters
 input int lookback_period = 10;           // Lookback Period
 input int start_hour = 9;                 // Trading Start Hour
 input int end_hour = 23;                  // Trading End Hour
+
+// Constants
+#define ARROW_OFFSET_POINTS 5
 
 // Indicator buffers
 double HighMA[];
@@ -181,7 +171,9 @@ int OnCalculate(const int rates_total,
             string obj_name = indicator_prefix + "BUY_" + TimeToString(time[idx], TIME_DATE|TIME_MINUTES);
             ObjectDelete(0, obj_name);
             
-            if(ObjectCreate(0, obj_name, OBJ_ARROW, 0, time[idx], low[idx]))
+            // Position arrow below the bar low with fixed point offset
+            double arrow_price = low[idx] - ARROW_OFFSET_POINTS * _Point;
+            if(ObjectCreate(0, obj_name, OBJ_ARROW, 0, time[idx], arrow_price))
             {
                 ObjectSetInteger(0, obj_name, OBJPROP_COLOR, clrBlue);
                 ObjectSetInteger(0, obj_name, OBJPROP_WIDTH, 2);
@@ -214,11 +206,14 @@ int OnCalculate(const int rates_total,
             string obj_name = indicator_prefix + "SELL_" + TimeToString(time[idx], TIME_DATE|TIME_MINUTES);
             ObjectDelete(0, obj_name);
             
-            if(ObjectCreate(0, obj_name, OBJ_ARROW, 0, time[idx], high[idx]))
+            // Position arrow above the bar high with fixed point offset
+            double arrow_price = high[idx] + ARROW_OFFSET_POINTS * _Point;
+            if(ObjectCreate(0, obj_name, OBJ_ARROW, 0, time[idx], arrow_price))
             {
                 ObjectSetInteger(0, obj_name, OBJPROP_COLOR, clrOrange);
                 ObjectSetInteger(0, obj_name, OBJPROP_WIDTH, 2);
                 ObjectSetInteger(0, obj_name, OBJPROP_ARROWCODE, 234);  // Down Triangle
+                ObjectSetInteger(0, obj_name, OBJPROP_ANCHOR, ANCHOR_BOTTOM);  // Anchor at arrow tip
             }
             
             // Send alert only on most recent bar
