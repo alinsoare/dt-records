@@ -1,49 +1,435 @@
-//@version=6
-indicator("Entry signals", overlay = true)
+//@version=5
+indicator("Pattern Entry Signals", overlay=true, max_labels_count=500, max_boxes_count=500)
 
-high_ma  = ta.ema(close, 20)
-medium_ma = ta.ema(close, 100)
-low_ma = ta.sma(close, 200)
-vol_sma = ta.ema(volume, 20)
-volume_ok = volume > vol_sma //* 0.8  // lowered threshold
-lookback_period = input.int(10, "Lookback Period", minval=3, maxval=100)
-start_hour = input.int(2, "Trading Start Hour", minval=0, maxval=23)
-end_hour = input.int(16, "Trading End Hour", minval=0, maxval=23)
+// ============================================================================
+// INPUT PARAMETERS
+// ============================================================================
 
-// --- Time filter (London SE open to NYSE close) ---
-valid_trading_hours = hour >= start_hour and hour < end_hour
+// Pattern settings
+barsLookback = input.int(200, "Bars Lookback", minval=10)
+patternBars = 5  // Fixed at 5 bars for pattern detection
+arrowOffset = input.int(15, "Arrow Offset (points)", minval=1)
 
-// --- Plot EMAs ---
-plot(high_ma,  color=color.blue,  linewidth=2, title="EMA 20")
-plot(medium_ma, color=color.green, linewidth=2, title="EMA 100")
-plot(low_ma, color=color.purple, linewidth=2, title="EMA 200 HTF")
+// AMA (Adaptive Moving Average) settings
+amaPeriod = input.int(10, "AMA Period", minval=1)
+amaFastEma = input.int(10, "AMA Fast EMA", minval=1)
+amaSlowEma = input.int(200, "AMA Slow EMA", minval=1)
+trendSpreadMultiplier = input.float(1.5, "Trend Spread Multiplier", minval=0.1, step=0.1)
 
-// --- Buy block ---
-x_over_high = ta.crossover(close, high_ma)
-medium_ma_above_low_ma = ta.barssince(medium_ma <= low_ma) >= lookback_period or na(ta.barssince(medium_ma <= low_ma))
-uptrend = medium_ma_above_low_ma and high_ma > medium_ma and medium_ma > low_ma and (medium_ma - medium_ma[1]) > 0
-base_buy_condition = x_over_high and volume_ok and uptrend and close > open and valid_trading_hours
-var int last_buy_bar = na
-no_recent_buy = na(last_buy_bar) or (bar_index - last_buy_bar) >= lookback_period
-buy_condition = base_buy_condition and no_recent_buy
-if buy_condition
-    last_buy_bar := bar_index
+// Signal filtering
+filterOppositeSignals = input.bool(true, "Filter Opposite Trend Signals", tooltip="SELL in uptrend, BUY in downtrend")
 
-// --- Plot buy signals ---
-alertcondition(buy_condition, "BUY", "buy")
-plotshape(buy_condition, title="Buy Signal", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.normal)
+// Visual settings
+showAMA = input.bool(true, "Show AMA Line")
+highArrowColor = input.color(color.red, "Sell Arrow Color")
+lowArrowColor = input.color(color.lime, "Buy Arrow Color")
 
-// --- Sell block ---
-x_under_high = ta.crossunder(close,high_ma)
-medium_ma_below_low_ma = ta.barssince(medium_ma >= low_ma) >= lookback_period or na(ta.barssince(medium_ma >= low_ma))
-downtrend = medium_ma_below_low_ma and high_ma < medium_ma and medium_ma < low_ma and (medium_ma - medium_ma[1]) < 0
-base_sell_condition = x_under_high and volume_ok and downtrend and close < open and valid_trading_hours
-var int last_sell_bar = na
-no_recent_sell = na(last_sell_bar) or (bar_index - last_sell_bar) >= lookback_period
-sell_condition = base_sell_condition and no_recent_sell
-if sell_condition
-    last_sell_bar := bar_index
+// Trading hours
+tradingStartHour = input.int(3, "Trading Start Hour (0-23)", minval=0, maxval=23)
+tradingEndHour = input.int(22, "Trading End Hour (0-23)", minval=0, maxval=23)
+tradeOnMonday = input.bool(true, "Trade on Monday")
+tradeOnTuesday = input.bool(true, "Trade on Tuesday")
+tradeOnWednesday = input.bool(true, "Trade on Wednesday")
+tradeOnThursday = input.bool(true, "Trade on Thursday")
+tradeOnFriday = input.bool(true, "Trade on Friday")
 
-// --- Plot sell signals ---
-alertcondition(sell_condition, "SELL", "sell")
-plotshape(sell_condition, title="Sell Signal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal)
+// Debug
+debugMode = input.bool(false, "Debug Mode")
+
+// ============================================================================
+// FUNCTIONS
+// ============================================================================
+
+// Get body top (close for bullish, open for bearish)
+getBodyTop(int barIndex) =>
+    close[barIndex] > open[barIndex] ? close[barIndex] : open[barIndex]
+
+// Get body bottom (open for bullish, close for bearish)
+getBodyBottom(int barIndex) =>
+    close[barIndex] > open[barIndex] ? open[barIndex] : close[barIndex]
+
+// Check if trading is allowed at current bar
+isTradingTimeAllowed() =>
+    // Check day of week
+    currentDay = dayofweek
+    if currentDay == dayofweek.saturday or currentDay == dayofweek.sunday
+        false
+    else if currentDay == dayofweek.monday and not tradeOnMonday
+        false
+    else if currentDay == dayofweek.tuesday and not tradeOnTuesday
+        false
+    else if currentDay == dayofweek.wednesday and not tradeOnWednesday
+        false
+    else if currentDay == dayofweek.thursday and not tradeOnThursday
+        false
+    else if currentDay == dayofweek.friday and not tradeOnFriday
+        false
+    else
+        // Check hour
+        currentHour = hour
+        currentHour >= tradingStartHour and currentHour <= tradingEndHour
+
+// Calculate AMA (Kaufman's Adaptive Moving Average)
+calculateAMA() =>
+    var float ama = na
+    
+    if bar_index < amaPeriod
+        ama := close
+        ama
+    else
+        // Calculate direction and volatility
+        direction = math.abs(close - close[amaPeriod])
+        
+        volatility = 0.0
+        for i = 0 to amaPeriod - 1
+            volatility += math.abs(close[i] - close[i + 1])
+        
+        // Efficiency Ratio
+        er = volatility != 0 ? direction / volatility : 0
+        
+        // Smoothing constants
+        fastSC = 2.0 / (amaFastEma + 1)
+        slowSC = 2.0 / (amaSlowEma + 1)
+        
+        // Scaled smoothing constant
+        ssc = math.pow(er * (fastSC - slowSC) + slowSC, 2)
+        
+        // Calculate AMA
+        ama := na(ama) ? close : ama + ssc * (close - ama)
+        ama
+
+// Get trend state at specific lookback
+// Returns: 1 = uptrend, -1 = downtrend, 0 = flat
+getTrendState(float amaValue, int lookback) =>
+    if bar_index < lookback
+        0
+    else
+        // Get AMA value from lookback bars ago
+        amaPrevious = amaValue[lookback]
+        amaDiff = amaValue - amaPrevious
+        
+        // Calculate threshold (approximate spread as ATR-based)
+        threshold = ta.atr(14) * trendSpreadMultiplier * 0.01
+        
+        if amaDiff > threshold
+            1  // Uptrend
+        else if amaDiff < -threshold
+            -1  // Downtrend
+        else
+            0  // Flat
+
+// Check if bar at offset is middle high pattern
+// offset: how many bars back from current (0=current, 1=previous, etc)
+isMiddleHighPattern(int offset) =>
+    sideBars = (patternBars - 1) / 2
+    
+    // Need enough bars on both sides
+    if offset < sideBars or offset + sideBars >= bar_index
+        false
+    else
+        centerBodyTop = getBodyTop(offset)
+        epsilon = syminfo.mintick * 0.1
+        
+        isValid = true
+        secondHighCount = 0
+        
+        // Check all bars in pattern window
+        for i = -sideBars to sideBars
+            if i != 0
+                checkOffset = offset - i  // Offset from current bar
+                if checkOffset >= 0 and checkOffset < bar_index
+                    barBodyTop = getBodyTop(checkOffset)
+                    diff = barBodyTop - centerBodyTop
+                    
+                    // If any bar is higher, pattern is invalid
+                    if diff > epsilon
+                        isValid := false
+                        break
+                    
+                    // Check for same height (only adjacent allowed)
+                    if math.abs(diff) <= epsilon
+                        if i == -1 or i == 1
+                            secondHighCount += 1
+                            if secondHighCount > 1
+                                isValid := false
+                                break
+                        else
+                            isValid := false
+                            break
+        
+        isValid
+
+// Check if bar at offset is middle low pattern
+// offset: how many bars back from current (0=current, 1=previous, etc)
+isMiddleLowPattern(int offset) =>
+    sideBars = (patternBars - 1) / 2
+    
+    // Need enough bars on both sides
+    if offset < sideBars or offset + sideBars >= bar_index
+        false
+    else
+        centerBodyBottom = getBodyBottom(offset)
+        epsilon = syminfo.mintick * 0.1
+        
+        isValid = true
+        secondLowCount = 0
+        
+        // Check all bars in pattern window
+        for i = -sideBars to sideBars
+            if i != 0
+                checkOffset = offset - i  // Offset from current bar
+                if checkOffset >= 0 and checkOffset < bar_index
+                    barBodyBottom = getBodyBottom(checkOffset)
+                    diff = centerBodyBottom - barBodyBottom
+                    
+                    // If any bar is lower, pattern is invalid
+                    if diff > epsilon
+                        isValid := false
+                        break
+                    
+                    // Check for same height (only adjacent allowed)
+                    if math.abs(diff) <= epsilon
+                        if i == -1 or i == 1
+                            secondLowCount += 1
+                            if secondLowCount > 1
+                                isValid := false
+                                break
+                        else
+                            isValid := false
+                            break
+        
+        isValid
+
+// Check for descending body tops
+// offset: bars back from current bar
+hasDescendingTops(int offset, int count) =>
+    if offset + count >= bar_index
+        false
+    else
+        isDescending = true
+        for i = 0 to count - 1
+            currentBar = offset + i
+            nextBar = offset + i + 1
+            
+            if currentBar < bar_index and nextBar < bar_index
+                currentTop = getBodyTop(currentBar)
+                nextTop = getBodyTop(nextBar)
+                
+                // Next bar (further back) should be lower
+                if nextTop >= currentTop
+                    isDescending := false
+                    break
+        
+        // Check distance
+        if isDescending and offset + 3 < bar_index
+            startTop = getBodyTop(offset)
+            thirdTop = getBodyTop(offset + 3)
+            distance = startTop - thirdTop
+            minDistance = ta.atr(14) * 0.03  // Approximate spread-based distance
+            
+            if distance <= minDistance
+                isDescending := false
+        
+        isDescending
+
+// Check for ascending body bottoms
+// offset: bars back from current bar
+hasAscendingBottoms(int offset, int count) =>
+    if offset + count >= bar_index
+        false
+    else
+        isAscending = true
+        for i = 0 to count - 1
+            currentBar = offset + i
+            nextBar = offset + i + 1
+            
+            if currentBar < bar_index and nextBar < bar_index
+                currentBottom = getBodyBottom(currentBar)
+                nextBottom = getBodyBottom(nextBar)
+                
+                // Next bar (further back) should be higher
+                if nextBottom <= currentBottom
+                    isAscending := false
+                    break
+        
+        // Check distance
+        if isAscending and offset + 3 < bar_index
+            startBottom = getBodyBottom(offset)
+            thirdBottom = getBodyBottom(offset + 3)
+            distance = thirdBottom - startBottom
+            minDistance = ta.atr(14) * 0.03  // Approximate spread-based distance
+            
+            if distance <= minDistance
+                isAscending := false
+        
+        isAscending
+
+// ============================================================================
+// MAIN LOGIC
+// ============================================================================
+
+// Calculate AMA
+amaValue = calculateAMA()
+
+// Plot AMA
+plot(showAMA ? amaValue : na, "AMA", color=color.blue, linewidth=1)
+
+// Get current trend state
+currentTrend = getTrendState(amaValue, 10)
+
+// Track last high/low for flat trend filtering
+var float lastHighValue = na
+var int lastHighBar = na
+var float lastLowValue = na
+var int lastLowBar = na
+
+// Variables for pattern detection
+var int validatedPatterns = 0
+var int invalidatedPatterns = 0
+
+// Check if trading time is allowed
+tradingAllowed = isTradingTimeAllowed()
+
+// Scan for patterns (only on confirmed bars)
+// Simple approach: check the pattern at bar offset 2 (3 bars back including current)
+if barstate.isconfirmed and bar_index > 10 and tradingAllowed
+    
+    patternOffset = 2  // Check pattern 2 bars back
+    sideBars = (patternBars - 1) / 2
+    
+    // ========== CHECK SELL PATTERN ==========
+    if isMiddleHighPattern(patternOffset)
+        
+        barTrend = getTrendState(amaValue, 10)
+        
+        // Validation checks
+        isValid = true
+        
+        // Filter SELL in uptrend
+        if filterOppositeSignals and barTrend == 1
+            isValid := false
+        
+        // Require descending tops in downtrend/flat
+        if isValid and (barTrend == -1 or barTrend == 0)
+            if not hasDescendingTops(patternOffset, 3)
+                isValid := false
+        
+        // Find highest high in pattern range
+        if isValid
+            maxHigh = high[patternOffset]
+            highBarOffset = patternOffset
+            
+            for j = (patternOffset - sideBars) to (patternOffset + sideBars)
+                if j >= 0
+                    if high[j] > maxHigh
+                        maxHigh := high[j]
+                        highBarOffset := j
+            
+            // Entry bar is 2 bars after pattern center
+            entryOffset = patternOffset - 2
+            
+            // Flat trend filter - skip tight ranges
+            if barTrend == 0 and not na(lastLowValue) and entryOffset >= 0
+                slDistance = maxHigh - close[entryOffset]
+                distanceToLow = close[entryOffset] - lastLowValue
+                
+                if distanceToLow > 0 and slDistance < 0.5 * distanceToLow
+                    isValid := false
+            
+            // Create SELL signal
+            if isValid and entryOffset >= 0
+                slDistancePrice = maxHigh - close[entryOffset]
+                slPoints = math.round(slDistancePrice / syminfo.mintick)
+                
+                // Draw arrow at the pattern high
+                label.new(bar_index - highBarOffset, high[highBarOffset], "▼\nSELL|" + str.tostring(slPoints), 
+                         style=label.style_label_down, 
+                         color=highArrowColor,
+                         textcolor=color.white, 
+                         size=size.tiny)
+                
+                // Update tracking
+                lastHighValue := maxHigh
+                lastHighBar := highBarOffset
+                validatedPatterns += 1
+                
+                if debugMode
+                    trendText = barTrend == 1 ? "UP" : barTrend == -1 ? "DN" : "FL"
+                    log.info("SELL | Offset " + str.tostring(highBarOffset) + " | " + trendText + " | SL:" + str.tostring(slPoints))
+    
+    // ========== CHECK BUY PATTERN ==========
+    if isMiddleLowPattern(patternOffset)
+        
+        barTrend = getTrendState(amaValue, 10)
+        
+        // Validation checks
+        isValid = true
+        
+        // Filter BUY in downtrend
+        if filterOppositeSignals and barTrend == -1
+            isValid := false
+        
+        // Require ascending bottoms in uptrend/flat
+        if isValid and (barTrend == 1 or barTrend == 0)
+            if not hasAscendingBottoms(patternOffset, 3)
+                isValid := false
+        
+        // Find lowest low in pattern range
+        if isValid
+            minLow = low[patternOffset]
+            lowBarOffset = patternOffset
+            
+            for j = (patternOffset - sideBars) to (patternOffset + sideBars)
+                if j >= 0
+                    if low[j] < minLow
+                        minLow := low[j]
+                        lowBarOffset := j
+            
+            // Entry bar is 2 bars after pattern center
+            entryOffset = patternOffset - 2
+            
+            // Flat trend filter - skip tight ranges
+            if barTrend == 0 and not na(lastHighValue) and entryOffset >= 0
+                slDistance = close[entryOffset] - minLow
+                distanceToHigh = lastHighValue - close[entryOffset]
+                
+                if distanceToHigh > 0 and slDistance < 0.5 * distanceToHigh
+                    isValid := false
+            
+            // Create BUY signal
+            if isValid and entryOffset >= 0
+                slDistancePrice = close[entryOffset] - minLow
+                slPoints = math.round(slDistancePrice / syminfo.mintick)
+                
+                // Draw arrow at the pattern low
+                label.new(bar_index - lowBarOffset, low[lowBarOffset], "BUY|" + str.tostring(slPoints) + "\n▲", 
+                         style=label.style_label_up,
+                         color=lowArrowColor,
+                         textcolor=color.white,
+                         size=size.tiny)
+                
+                // Update tracking
+                lastLowValue := minLow
+                lastLowBar := lowBarOffset
+                validatedPatterns += 1
+                
+                if debugMode
+                    trendText = barTrend == 1 ? "UP" : barTrend == -1 ? "DN" : "FL"
+                    log.info("BUY | Offset " + str.tostring(lowBarOffset) + " | " + trendText + " | SL:" + str.tostring(slPoints))
+
+// Display trend state
+trendText = currentTrend == 1 ? "↑ UPTREND" : currentTrend == -1 ? "↓ DOWNTREND" : "↔ FLAT"
+trendColor = currentTrend == 1 ? color.green : currentTrend == -1 ? color.red : color.gray
+
+var table infoTable = table.new(position.top_left, 1, 2, bgcolor=color.new(color.black, 80))
+if barstate.islast
+    table.cell(infoTable, 0, 0, "AMA Trend: " + trendText, text_color=trendColor, text_size=size.small)
+    table.cell(infoTable, 0, 1, "Valid Patterns: " + str.tostring(validatedPatterns), 
+               text_color=color.white, text_size=size.tiny)
+
+// Alert conditions (simple pattern detection without all filters)
+sellPatternDetected = barstate.isconfirmed and bar_index > 10 and isMiddleHighPattern(2)
+buyPatternDetected = barstate.isconfirmed and bar_index > 10 and isMiddleLowPattern(2)
+
+alertcondition(sellPatternDetected, "SELL Signal", "Pattern Entry SELL signal detected")
+alertcondition(buyPatternDetected, "BUY Signal", "Pattern Entry BUY signal detected")

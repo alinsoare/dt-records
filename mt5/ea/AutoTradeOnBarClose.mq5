@@ -13,7 +13,7 @@ input double RiskPercent = 1.0;        // Risk percentage of equity (default 1%)
 input int MagicNumber = 2025111402;        // Magic number for this EA
 input string TradeComment = "SignalTrade"; // Comment for trades
 input int Slippage = 10;               // Maximum slippage in points
-input string SignalPrefix = "EntrySignal_"; // Prefix for signal objects from indicator
+input string SignalPrefix = "EntrySignals_"; // Prefix for signal objects from indicator
 
 // Global variables
 datetime lastBarTime = 0;              // Time of the last processed bar
@@ -29,7 +29,7 @@ int OnInit()
    // Initialize last bar time to current bar time
    lastBarTime = iTime(_Symbol, _Period, 0);
    
-   Print("BuyOnBarClose EA initialized successfully");
+   Print("AutoTradeOnBarClose EA initialized successfully");
    Print("Risk per trade: ", RiskPercent, "%");
    Print("Symbol: ", _Symbol);
    Print("Period: ", EnumToString(_Period));
@@ -42,7 +42,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   Print("BuyOnBarClose EA stopped. Reason: ", reason);
+   Print("AutoTradeOnBarClose EA stopped. Reason: ", reason);
 }
 
 //+------------------------------------------------------------------+
