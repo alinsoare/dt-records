@@ -85,6 +85,21 @@
             box-shadow: 0 15px 40px rgba(0,0,0,0.3);
         }
 
+        .account-section {
+            margin-bottom: 30px;
+        }
+
+        .account-header {
+            font-size: 1.5em;
+            color: #764ba2;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            font-weight: 700;
+        }
+
         .date-header {
             font-size: 1.3em;
             color: #667eea;
@@ -208,7 +223,7 @@
         </header>
 
         <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="🔍 Search by date or filename...">
+            <input type="text" id="searchInput" placeholder="🔍 Search by account, date, or filename...">
         </div>
 
         <div id="loading" class="loading">Loading photos...</div>
@@ -238,42 +253,71 @@
                 const username = window.location.hostname.split('.')[0];
                 
                 // For GitHub Pages, we'll scan the photos directory
-                // This is a simple implementation that works with the folder structure
+                // This implementation works with the account/date folder structure
                 const response = await fetch(`https://api.github.com/repos/${username}/${repoPath}/contents/photos`);
                 
                 if (!response.ok) {
                     throw new Error('Photos directory not found');
                 }
                 
-                const folders = await response.json();
+                const accountFolders = await response.json();
                 
-                if (!folders || folders.length === 0) {
+                if (!accountFolders || accountFolders.length === 0) {
                     loading.style.display = 'none';
                     noPhotos.style.display = 'block';
                     return;
                 }
 
-                // Sort folders by date (newest first)
-                folders.sort((a, b) => b.name.localeCompare(a.name));
+                // Sort account folders
+                accountFolders.sort((a, b) => a.name.localeCompare(b.name));
 
-                // Load photos from each date folder
-                for (const folder of folders) {
-                    if (folder.type === 'dir') {
-                        const dateResponse = await fetch(folder.url);
-                        const photos = await dateResponse.json();
+                // Load photos from each account folder
+                for (const accountFolder of accountFolders) {
+                    if (accountFolder.type === 'dir') {
+                        // Create account section
+                        const accountSection = document.createElement('div');
+                        accountSection.className = 'account-section';
+                        accountSection.dataset.account = accountFolder.name;
                         
-                        const imageFiles = photos.filter(file => 
-                            /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
-                        );
+                        const accountHeader = document.createElement('div');
+                        accountHeader.className = 'account-header';
+                        accountHeader.textContent = `📈 Account: ${accountFolder.name}`;
+                        accountSection.appendChild(accountHeader);
+                        
+                        // Fetch date folders within this account
+                        const dateResponse = await fetch(accountFolder.url);
+                        const dateFolders = await dateResponse.json();
+                        
+                        // Sort date folders by date (newest first)
+                        dateFolders.sort((a, b) => b.name.localeCompare(a.name));
+                        
+                        let hasPhotos = false;
+                        
+                        // Load photos from each date folder
+                        for (const dateFolder of dateFolders) {
+                            if (dateFolder.type === 'dir') {
+                                const photoResponse = await fetch(dateFolder.url);
+                                const photos = await photoResponse.json();
+                                
+                                const imageFiles = photos.filter(file => 
+                                    /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
+                                );
 
-                        if (imageFiles.length > 0) {
-                            createDateSection(folder.name, imageFiles);
+                                if (imageFiles.length > 0) {
+                                    hasPhotos = true;
+                                    createDateSection(accountSection, dateFolder.name, imageFiles);
+                                }
+                            }
+                        }
+                        
+                        if (hasPhotos) {
+                            gallery.appendChild(accountSection);
                         }
                     }
                 }
 
                 loading.style.display = 'none';
-                gallery.style.display = 'grid';
+                gallery.style.display = 'block';
                 
             } catch (error) {
                 console.error('Error loading photos:', error);
@@ -282,9 +326,7 @@
             }
         }
 
-        function createDateSection(date, photos) {
-            const gallery = document.getElementById('gallery');
-            
+        function createDateSection(accountSection, date, photos) {
             const section = document.createElement('div');
             section.className = 'date-section';
             section.dataset.date = date;
@@ -321,7 +363,7 @@
             
             section.appendChild(header);
             section.appendChild(photoGrid);
-            gallery.appendChild(section);
+            accountSection.appendChild(section);
         }
 
         function formatDate(dateStr) {
@@ -355,20 +397,29 @@
         // Search functionality
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase();
-            const sections = document.querySelectorAll('.date-section');
+            const accountSections = document.querySelectorAll('.account-section');
             
-            sections.forEach(section => {
-                const date = section.dataset.date.toLowerCase();
-                const photos = section.querySelectorAll('.photo-name');
-                let hasMatch = date.includes(searchTerm);
+            accountSections.forEach(accountSection => {
+                const accountId = accountSection.dataset.account.toLowerCase();
+                const dateSections = accountSection.querySelectorAll('.date-section');
+                let accountHasMatch = accountId.includes(searchTerm);
                 
-                photos.forEach(photo => {
-                    if (photo.textContent.toLowerCase().includes(searchTerm)) {
-                        hasMatch = true;
-                    }
+                dateSections.forEach(section => {
+                    const date = section.dataset.date.toLowerCase();
+                    const photos = section.querySelectorAll('.photo-name');
+                    let hasMatch = date.includes(searchTerm) || accountHasMatch;
+                    
+                    photos.forEach(photo => {
+                        if (photo.textContent.toLowerCase().includes(searchTerm)) {
+                            hasMatch = true;
+                        }
+                    });
+                    
+                    section.style.display = hasMatch ? 'block' : 'none';
+                    if (hasMatch) accountHasMatch = true;
                 });
                 
-                section.style.display = hasMatch ? 'block' : 'none';
+                accountSection.style.display = accountHasMatch ? 'block' : 'none';
             });
         });
 

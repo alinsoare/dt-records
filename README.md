@@ -4,23 +4,28 @@ This repository stores trading screenshots and charts organized by date for easy
 
 ## 📁 Folder Structure
 
-Photos are organized by date in the following format:
+Photos are organized by account ID and date in the following format:
 ```
 photos/
-  └── YYYY-MM-DD/
-      ├── screenshot1.png
-      ├── screenshot2.png
-      └── ...
+  └── ACCOUNT_ID/
+      └── YYYY-MM-DD/
+          ├── screenshot1.png
+          ├── screenshot2.png
+          └── ...
 ```
 
 Example:
 ```
 photos/
-  ├── 2025-11-07/
-  │   ├── trade-entry-1.png
-  │   └── trade-exit-1.png
-  └── 2025-11-08/
-      └── market-analysis.png
+  ├── 89654/
+  │   ├── 2025-11-07/
+  │   │   ├── trade-entry-1.png
+  │   │   └── trade-exit-1.png
+  │   └── 2025-11-08/
+  │       └── market-analysis.png
+  └── 12345/
+      └── 2025-11-07/
+          └── trade-entry.png
 ```
 
 ## 🌐 Web Access
@@ -34,20 +39,26 @@ You can browse photos by date using the web interface.
 
 ### Method 1: Using the Helper Script
 ```bash
-# Add a photo for today's date
+# Add a photo for today's date (uses default account: 89654)
 ./add-photo.sh path/to/your/screenshot.png
 
-# Add a photo for a specific date
+# Add a photo for a specific date (uses default account: 89654)
 ./add-photo.sh path/to/your/screenshot.png 2025-11-07
+
+# Add a photo for a specific date and account
+./add-photo.sh path/to/your/screenshot.png 2025-11-07 89654
+
+# Add a photo to a different account
+./add-photo.sh path/to/your/screenshot.png 2025-11-07 12345
 ```
 
 ### Method 2: Manual Upload
-1. Create a folder with today's date: `photos/YYYY-MM-DD/`
+1. Create folders: `photos/ACCOUNT_ID/YYYY-MM-DD/`
 2. Copy your photos into that folder
 3. Commit and push:
 ```bash
 git add photos/
-git commit -m "Add trading photos for YYYY-MM-DD"
+git commit -m "Add trading photos for account ACCOUNT_ID on YYYY-MM-DD"
 git push origin main
 ```
 
@@ -85,11 +96,17 @@ git push origin main
 ## 📋 Quick Commands
 
 ```bash
-# Add photos for today
-./add-photo.sh screenshot1.png screenshot2.png
+# Add photos for today (default account: 89654)
+./add-photo.sh screenshot1.png
 
-# View all photos by date
-ls -la photos/
+# Add photo to specific account
+./add-photo.sh screenshot.png 2025-11-07 12345
+
+# View all photos by account
+ls -la photos/89654/
+
+# View photos for specific date
+ls -la photos/89654/2025-11-07/
 
 # Push changes to GitHub (auto-deploys via GitHub Actions!)
 git add photos/
@@ -107,7 +124,7 @@ Just push your changes and the site updates automatically within 30-60 seconds! 
 
 ## 🔍 Viewing Photos
 
-- **On GitHub**: Navigate to the `photos/` folder and browse by date
+- **On GitHub**: Navigate to the `photos/ACCOUNT_ID/` folder and browse by date
 - **On Web**: Visit your GitHub Pages URL and use the photo gallery
 - **Locally**: Open `index.html` in your browser
 
