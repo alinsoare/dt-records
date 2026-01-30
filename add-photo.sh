@@ -85,7 +85,11 @@ else
     exit 1
 fi
 
-git add photos/$ACCOUNT_ID/$DATE/
+# Regenerate photo index
+echo -e "${BLUE}Updating photo index...${NC}"
+"$SCRIPT_DIR/generate-index.sh" > /dev/null
+
+git add photos/$ACCOUNT_ID/$DATE/ photos.json
 git commit -m "Add trading photos for account $ACCOUNT_ID on $DATE"
 git push
 
